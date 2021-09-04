@@ -1,0 +1,57 @@
+firewalls:
+  hosts:
+    fw1:
+      provider:
+        ip_address: 192.168.10.100
+        api_key: "LUFRPT03UEtJUUdxS3lvbk93YWQ0QjB5aG1Mb0ZoMWs9QlkyRTNYREJlcVNmYktBb2J4MUJUbEJ2bW84K2xXVjljbUR0aUxlaHkvVTJ5TTQ4YXFzMWk2QTFEQ29RNTZDNw=="
+      hostname: "fw01"
+      int_mappings:
+       - { interface: "ethernet1/1", zone: "WAN", dhcp: true, create_default_route: yes}
+       - { interface: "ethernet1/2"}
+      subinterfaces:
+       - { name: "ethernet1/2.2", tag: 2, zone_name: "Trust", dhcp: false, ip: [192.168.2.221/24]}
+       - { name: "ethernet1/2.8", tag: 8, zone_name: "DMZ", dhcp: false, ip: [192.168.8.221/24]}
+      tunnels:
+       - { name: "tunnel.1", ip: ["192.168.100.1"], zone_name: "DMZ", vr_name: "default"}
+      loopbacks: 
+       - { name: "loopback.8", ip: ["192.168.8.151"], zone_name: "DMZ", vr_name: "default"}
+    fw2:
+      provider:
+        ip_address: 192.168.10.101
+        api_key: "LUFRPT16ekptRFdDbWp1U2JwNWJRSVQ0aGpNblVmY0k9QlkyRTNYREJlcVNmYktBb2J4MUJUbEJ2bW84K2xXVjljbUR0aUxlaHkvV1J2bXpVK2ZNajY2S1Nrbkh1dCtKVg=="
+      hostname: "fw02"
+      int_mappings:
+       - { interface: "ethernet1/1", zone: "WAN", dhcp: true, create_default_route: yes}
+       - { interface: "ethernet1/2"}
+      subinterfaces:
+       - { name: "ethernet1/2.2", tag: 2, zone_name: "Trust", dhcp: false, ip: [192.168.2.222/24]}
+       - { name: "ethernet1/2.8", tag: 8, zone_name: "DMZ", dhcp: false, ip: [192.168.8.222/24]}
+      tunnels:
+       - { name: "tunnel.1", ip: ["192.168.101.1"], zone_name: "DMZ", vr_name: "default"}
+      loopbacks: 
+       - { name: "loopback.8", ip: ["192.168.8.152"], zone_name: "DMZ", vr_name: "default"}
+  vars:
+      primary_ntp: "0.au.pool.ntp.org"
+      secondary_ntp: "1.au.pool.ntp.org"
+      timezone: "Australia/Melbourne"
+      motd: "Custom MOTD"
+      primary_dns: 1.1.1.1
+      secondary_dns: 8.8.8.8
+      domain_name: "palo.corp"
+      zones: ["WAN", "Trust", "DMZ", "Management"]
+      template_vars:
+        user_id:
+          svc_account: !unsafe 'CORP\svc_pan'
+          svc_password: "MyServicePassword"
+          domain: palo.corp
+        ldap:
+          profile_name: LDAP-Auth
+          server_title: DC1
+          server_address: dc1.palo.corp
+          ssl: True
+          bind_dn: "cn=Palo Alto, ou=Service Accounts, ou=palocorp, dc=palo,dc=corp"
+          base_dn: "DC=palo,DC=corp"
+          bind_password: "MyServicePassword"
+
+
+
