@@ -1,0 +1,36 @@
+---
+ - name: Configuring firewall
+   gather_facts: true
+   connection: local
+   hosts: firewalls
+   tasks:
+
+
+    - name: Check if variables are defined
+      fail:
+        msg: "Version not defined. Specify version variable e.g. -e version=10.0.1"
+      when: version is not defined
+
+    - name: Check if ready
+      paloaltonetworks.panos.panos_check:
+        provider: "{{ provider }}"
+
+    - name: Backup configuration
+      paloaltonetworks.panos.panos_export:
+        provider: "{{ provider }}"
+        category: configuration
+        filename: "running-config-pre-{{ version }}.xml"
+
+    - name: Upgrade software
+      paloaltonetworks.panos.panos_software:
+        provider: "{{ provider }}"
+        version: "{{ version }}"
+        install: true
+        restart: false
+      register: software_result
+      
+    
+    - name: Restart
+      paloaltonetworks.panos.panos_restart:
+        provider: "{{ provider }}"
+    

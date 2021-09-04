@@ -1,0 +1,3 @@
+groups:
+  - group_name: "Approved DC Apps"
+    apps: ["netbios-ns", "active-directory-base", "msrpc", "ms-ds-smbv3", "ldap", "kerberos", "ms-win-dns", "ocsp", "ms-local-security-management", "ms-netlogon"]

@@ -1,0 +1,570 @@
+---
+ - name: Configuring firewall
+   gather_facts: true
+   connection: local
+   hosts: firewalls
+   tasks:
+
+
+
+
+    - name: Template items
+      set_fact:
+        user_id_xml: "{{ lookup('template', '../templates/userid.j2') }}"
+        ldap_xml: "{{ lookup('template', '../templates/ldap-profile.j2') }}"
+      tags:
+       - "templates"
+        
+
+    - name: Check if tags YAML exists
+      stat:
+        path: "../vars/tags.yml"
+      register: tag_yaml_exist
+      tags:
+       - "objects"
+       - "tags"
+
+    - name: Retrieve tag vars
+      include_vars:
+        file: "../vars/tags.yml"
+        name: "tags"
+      when: tag_yaml_exist.stat.exists
+      tags:
+       - "objects"
+       - "tags"
+
+    - name: Template tags
+      set_fact:
+        tag_xml: "{{ lookup('template', '../templates/tags.j2') | replace('\n', '') }}"
+      when: tag_yaml_exist.stat.exists
+      tags:
+       - "objects"
+       - "tags"
+
+
+    - name: Set MGMT configuration
+      paloaltonetworks.panos.panos_mgtconfig:
+        provider: "{{ provider }}"
+        dns_server_primary: "{{ primary_dns }}"
+        dns_server_secondary: "{{ secondary_dns }}"
+        domain: "{{ domain_name }}"
+        ntp_server_primary: "{{ primary_ntp }}"
+        ntp_server_secondary: "{{ secondary_ntp }}"
+        hostname: "{{ hostname }}"
+        login_banner: "{{ motd }}"
+        timezone: "{{ timezone }}"
+
+
+    - name: Upload web cert
+      paloaltonetworks.panos.panos_import:
+        provider: "{{ provider }}"
+        category: keypair
+        certificate_name: "mgmt_cert"
+        passphrase: "Password1234"
+        filename: "data/ssl/PaloAlto-MGMT.pfx"
+        format: pkcs12
+
+    - name: Set template config snippets
+      paloaltonetworks.panos.panos_type_cmd:
+        provider: "{{ provider }}"
+        cmd: edit
+        xpath: "{{ item.xpath }}"
+        element: "{{ item.element }}"
+      with_items:
+       - {xpath: "/config/devices/entry[@name='localhost.localdomain']/vsys/entry[@name='vsys1']/user-id-collector/setting", element: "{{ user_id_xml }}" }
+       - {xpath: "/config/shared/server-profile/ldap", element: "{{ ldap_xml }}" }
+       - {xpath: "/config/devices/entry[@name='localhost.localdomain']/vsys/entry[@name='vsys1']/tag", element: "{{ tag_xml }}"}
+      tags:
+       - "objects"
+       - "templates"
+   
+    - name: Set template config snippets (Set/Create)
+      paloaltonetworks.panos.panos_type_cmd:
+        provider: "{{ provider }}"
+        cmd: set
+        xpath: "{{ item.xpath }}"
+        element: "{{ item.element }}"
+      with_items:
+       - {xpath: '/config/shared/ssl-tls-service-profile', element: '<entry name="PaloAlto-MGMT"><protocol-settings><min-version>tls1-2</min-version><max-version>max</max-version></protocol-settings><certificate>mgmt_cert</certificate></entry>'}
+       - {xpath: "/config/devices/entry[@name='localhost.localdomain']/deviceconfig/system", element: '<ssl-tls-service-profile>PaloAlto-MGMT</ssl-tls-service-profile>'}
+      tags:
+       - "templates"
+
+
+
+    - name: Retrieve license info
+      paloaltonetworks.panos.panos_lic:
+        provider: "{{ provider }}"
+        force: False
+      register: license_result
+      when: skip_license is not defined
+
+
+    - name: Dynamic updates
+      paloaltonetworks.panos.panos_op:
+        provider: "{{ provider }}"
+        cmd: "{{ item }}"
+      with_items:
+      - "request support check"
+      - "request wildfire upgrade check"
+      - "request wildfire upgrade download latest"
+      - "request global-protect-clientless-vpn upgrade download latest"
+      - "request anti-virus upgrade download latest"
+      - "request url-filtering upgrade"
+      - "request system software check"
+      when: fast is not defined
+
+    - name: Dynamic updates with parameters
+      paloaltonetworks.panos.panos_op:
+        provider: "{{ provider }}"
+        cmd: "{{ item }}"
+        cmd_is_xml: True
+      with_items:
+       - "<request><content><upgrade><download><latest></latest></download></upgrade></content></request>"
+       - "<request><content><upgrade><install><version>latest</version></install></upgrade></content></request>"
+       - "<request><anti-virus><upgrade><install><version>latest</version></install></upgrade></anti-virus></request>"
+       - "<request><global-protect-clientless-vpn><upgrade><install><version>latest</version></install></upgrade></global-protect-clientless-vpn></request>"
+       - "<request><wildfire><upgrade><install><version>latest</version></install></upgrade></wildfire></request>"
+      when: fast is not defined
+
+
+
+    - name: Create standard zones
+      paloaltonetworks.panos.panos_zone:
+        provider: "{{ provider }}"
+        zone: "{{ item }}"
+      with_items:
+       - "{{ zones }}"
+
+    - name: Set interfaces
+      paloaltonetworks.panos.panos_interface:
+        provider: "{{ provider }}"
+        if_name: "{{ item.interface }}"
+        zone_name: "{{ item.zone  | default(omit) }}"
+        mode: "layer3"
+        enable_dhcp: "{{ item.dhcp }}"
+        create_default_route: "{{ item.create_default_route  | default(omit) }}"  
+      with_items:
+       - "{{ int_mappings }}"
+
+    - name: Set sub interfaces
+      paloaltonetworks.panos.panos_l3_subinterface:
+        provider: "{{ provider }}"
+        name: "{{ item.name }}"
+        tag: "{{ item.tag | default(omit) }}"
+        zone_name: "{{ item.zone_name | default(omit) }}"
+        enable_dhcp: "{{ item.dhcp | default(omit) }}"
+        ip: "{{ item.ip | default(omit) }}"
+      with_items:
+       - "{{ subinterfaces }}"
+      
+    - name: Set tunnels
+      paloaltonetworks.panos.panos_tunnel:
+        provider: "{{ provider }}"
+        if_name: "{{ item.name }}"
+        ip: "{{ item.ip }}"
+        zone_name: "{{ item.zone_name }}"
+        vr_name: "{{ item.vr_name | default('default', true) }}"
+      with_items:
+       - "{{ tunnels }}"
+
+    - name: Set loopbacks
+      paloaltonetworks.panos.panos_loopback_interface:
+        provider: "{{ provider }}"
+        if_name: "{{ item.name }}"
+        ip: "{{ item.ip }}"
+        zone_name: "{{ item.zone_name }}"
+        vr_name: "{{ item.vr_name | default('default', true) }}"
+      with_items:
+       - "{{ loopbacks }}"
+
+    - name: Check if GlobalProtect config exists
+      stat:
+        path: "../vars/globalprotect.yml"
+      register: gp_yaml_exist
+      tags:
+       - "globalprotect"
+
+    - name: Load GP vars
+      include_vars:
+        file: "../vars/globalprotect.yml"
+        name: "globalprotect"
+
+    - name: Template GP
+      set_fact:
+        globalprotect_xml: "{{ lookup('template', '../templates/globalprotect.j2') | replace('\n', '') }}"
+      when: gp_yaml_exist.stat.exists
+      tags:
+       - "globalprotect"
+
+    - name: Blank GlobalProtect configuration
+      paloaltonetworks.panos.panos_type_cmd:
+        provider: "{{ provider }}"
+        cmd: delete
+        xpath: "/config/devices/entry[@name='localhost.localdomain']/vsys/entry[@name='vsys1']/global-protect"
+        element: "<global-protect><global-protect-portal/><global-protect-gateway/></global-protect>"
+      when: gp_yaml_exist.stat.exists
+    
+    - name: Install GlobalProtect config
+      paloaltonetworks.panos.panos_type_cmd:
+        provider: "{{ provider }}"
+        cmd: set
+        xpath: "/config/devices/entry[@name='localhost.localdomain']/vsys/entry[@name='vsys1']"
+        element: "{{ globalprotect_xml }}"
+      when: gp_yaml_exist.stat.exists
+      tags:
+       - "globalprotect"
+        
+
+
+    - name: Upload Certificates
+      paloaltonetworks.panos.panos_import:
+        provider: "{{ provider }}"
+        category: keypair
+        certificate_name: "{{ item.name }}"
+        format: pkcs12
+        passphrase: "{{ item.password }}"
+        filename: "{{ item.file }}"
+      with_items:
+       - { name: "Palo Alto SSL Decrypt CA1", password: "Password1234", file: "data/ssl/PaloAltoCA.pfx"}
+
+
+    - name: Check if address objects YML exists
+      local_action:
+        module: stat
+        path: ../vars/address_objects.yml
+      register: address_objects_file
+      tags:
+       - "objects"
+       - "address_objects"
+
+
+    - name: Load address objects
+      include_vars:
+        file: ../vars/address_objects.yml
+        name: address_objects
+      when: address_objects_file.stat.exists
+      tags:
+       - "objects"
+       - "address_objects"
+
+
+    - name: Create address objects
+      paloaltonetworks.panos.panos_address_object:
+        provider: "{{ provider }}"
+        name: "{{ item.name }}"
+        value: "{{ item.value }}"
+        address_type: "{{ item.type | default(omit) }}"
+        tag: "{{ item.tags | default(omit) }}"
+        description: "{{ item.description | default(omit) }}"
+      with_items: 
+       - "{{ address_objects.addresses }} "
+      tags:
+       - "objects"
+       - "address_objects"
+      when: address_objects_file.stat.exists
+
+    - name: Check if service objects YML exists
+      local_action:
+        module: stat
+        path: ../vars/services.yml
+      register: services_file
+      tags:
+       - "objects"
+       - "services"
+
+
+    - name: Load service objects
+      include_vars:
+        file: ../vars/services.yml
+        name: service_objects
+      when: services_file.stat.exists
+      tags:
+       - "objects"
+       - "services"
+
+
+    - name: Create service objects
+      paloaltonetworks.panos.panos_service_object:
+        provider: "{{ provider }}"
+        name: "{{ item.name }}"
+        destination_port: "{{ item.destination_port | default(omit) }}"
+        source_port: "{{ item.source_port | default(omit) }}"
+        protocol: "{{ item.protocol | default(omit) }}"
+        tag: "{{ item.tags | default(omit) }}"
+        description: "{{ item.description | default(omit) }}"
+      with_items: 
+       - "{{ service_objects.services }} "
+      tags:
+       - "objects"
+       - "services"
+      when: services_file.stat.exists
+
+
+    - name: Check if address object groups YML exists
+      local_action:
+        module: stat
+        path: ../vars/address_groups.yml
+      register: address_groups_file
+      tags:
+       - "objects"
+       - "address_groups"
+
+
+    - name: Load address groups
+      include_vars:
+        file: ../vars/address_groups.yml
+        name: address_groups
+      when: address_groups_file.stat.exists
+      tags:
+       - "objects"
+       - "address_groups"
+
+
+    - name: Create address groups
+      paloaltonetworks.panos.panos_address_group:
+        provider: "{{ provider }}"
+        name: "{{ item.name }}"
+        static_value: "{{ item.static_value }}"
+        tag: "{{ item.tags | default(omit) }}"
+        description: "{{ item.description | default(omit) }}"
+      with_items: 
+       - "{{ address_groups.groups }} "
+      tags:
+       - "objects"
+       - "address_groups"
+      when: address_groups_file.stat.exists
+
+
+      
+    - name: Check if app groups exist
+      local_action:
+        module: stat
+        path: ../vars/application_groups.yml
+      register: app_groups_file
+      tags:
+       - "objects"
+       - "app_groups"
+
+
+    - name: Load app groups
+      include_vars:
+        file: ../vars/application_groups.yml
+        name: app_groups
+      when: app_groups_file.stat.exists
+      tags:
+       - "objects"
+       - "app_groups"
+
+    - name: Create app groups
+      paloaltonetworks.panos.panos_application_group:
+        provider: "{{ provider }}"
+        name: "{{ item.group_name }}"
+        value: "{{ item.apps }}"
+      with_items:
+       - "{{ app_groups.groups }}"
+      tags:
+       - "objects"
+       - "app_groups"
+
+
+
+    - name: Check if security rules exist
+      local_action:
+        module: stat
+        path: ../vars/security_rules.yml
+      register: security_rules_file
+      tags:
+       - "rules"
+       - "security_rules"
+
+
+    - name: Load security rules
+      include_vars:
+        file: ../vars/security_rules.yml
+        name: security_rules
+      when: security_rules_file.stat.exists
+      tags:
+       - "rules"
+       - "security_rules"
+
+    - name: Get all security rules
+      paloaltonetworks.panos.panos_security_rule_facts:
+        provider: "{{ provider }}"
+      register: s_rules
+      when: security_rules_file.stat.exists
+      tags:
+       - "rules"
+       - "security_rules"
+
+    - name: Delete all security rules
+      paloaltonetworks.panos.panos_security_rule:
+        rule_name: "{{ item }}"
+        provider: "{{ provider }}"
+        state: absent
+      with_items:
+       - "{{ s_rules.rule_names }}"
+      tags:
+       - debug
+       - "rules"
+       - "security_rules"
+      when: security_rules_file.stat.exists
+
+    - name: Set security rules
+      paloaltonetworks.panos.panos_security_rule:
+        provider: "{{ provider }}"
+        rule_name: "{{ item.rule_name }}"
+        application: "{{ item.application | default(omit) }}"
+        action: "{{ item.action | default(omit) }}"
+        category: "{{ item.category | default(omit) }}"
+        data_filtering: "{{ item.data_filtering | default(omit) }}"
+        description: "{{ item.description | default(omit) }}"
+        destination_ip: "{{ item.destination_ip | default(omit) }}"
+        destination_zone: "{{ item.destination_zone | default(omit) }}"
+        disable_server_response_inspection: "{{ item.disable_server_response_inspection | default(omit) }}"
+        disabled: "{{ item.disabled | default(omit) }}"
+        existing_rule: "{{ item.existing_rule | default(omit) }}"
+        file_blocking: "{{ item.file_blocking | default(omit) }}"
+        group_profile: "{{ item.group_profile | default(omit) }}"
+        hip_profiles: "{{ item.hip_profiles | default(omit) }}"
+        icmp_unreachable: "{{ item.icmp_unreachable | default(omit) }}"
+        location: "{{ item.location | default(omit) }}"
+        log_end: "{{ item.log_end | default(omit) }}"
+        log_setting: "{{ item.log_setting | default(omit) }}"
+        log_setting: "{{ item.log_setting | default(omit) }}"
+        log_start: "{{ item.log_start | default(omit) }}"
+        negate_destination: "{{ item.negate_destination | default(omit) }}"
+        negate_source: "{{ item.negate_source | default(omit) }}"
+        rule_type: "{{ item.rule_type | default(omit) }}"
+        schedule: "{{ item.schedule | default(omit) }}"
+        service: "{{ item.service | default(omit) }}"
+        source_ip: "{{ item.source_ip | default(omit) }}"
+        source_user: "{{ item.source_user | default(omit) }}"
+        source_zone: "{{ item.source_zone | default(omit) }}"
+        spyware: "{{ item.spyware | default(omit) }}"
+        state: "{{ item.state | default(omit) }}"
+        tag_name: "{{ item.tag_name | default(omit) }}"
+        url_filtering: "{{ item.url_filtering | default(omit) }}"
+        vsys: "{{ item.vsys | default(omit) }}"
+        vulnerability: "{{ item.vulnerability | default(omit) }}"
+        wildfire_analysis: "{{ item.wildfire_analysis | default(omit) }}"
+      with_items:
+       - "{{ security_rules.rules }}"
+      tags:
+       - "debug"
+       - "rules"
+       - "security_rules"
+      when: security_rules_file.stat.exists
+
+    - name: Check if NAT rules exist
+      local_action:
+        module: stat
+        path: ../vars/nat_rules.yml
+      register: nat_rules_file
+      tags:
+       - "rules"
+       - "nat_rules"
+
+
+    - name: Load NAT rules
+      include_vars:
+        file: ../vars/nat_rules.yml
+        name: nat_rules
+      when: nat_rules_file.stat.exists
+      tags:
+       - "rules"
+       - "nat_rules"
+
+    - name: Get all NAT rules
+      paloaltonetworks.panos.panos_nat_rule_facts:
+        provider: "{{ provider }}"
+        listing: True
+      register: n_rules
+      tags:
+       - "rules"
+       - "nat_rules"
+      when: nat_rules_file.stat.exists   
+
+    - name: Delete all NAT rules
+      paloaltonetworks.panos.panos_nat_rule:
+        rule_name: "{{ item.rule_name }}"
+        provider: "{{ provider }}"
+        state: absent
+      with_items:
+       - "{{ n_rules.listing }}"
+      tags:
+       - debug
+      when: nat_rules_file.stat.exists
+
+
+    - name: Set NAT rules
+      paloaltonetworks.panos.panos_nat_rule:
+        provider: "{{ provider }}"
+        rule_name: "{{ item.rule_name }}"
+        application: "{{ item.application | default(omit) }}"
+        description: "{{ item.description | default(omit) }}"
+        destination_ip: "{{ item.destination_ip | default(omit) }}"
+        destination_zone: "{{ item.destination_zone | default(omit) }}"
+        dnat_address: "{{ item.dnat_address | default(omit) }}"
+        dnat_port: "{{ item.dnat_port | default(omit) }}"
+        existing_rule: "{{ item.existing_rule | default(omit) }}"
+        location: "{{ item.location | default(omit) }}"
+        nat_type: "{{ item.nat_type | default(omit) }}"
+        rule_type: "{{ item.rule_type | default(omit) }}"
+        service: "{{ item.service | default(omit) }}"
+        snat_address_type: "{{ item.snat_address_type | default(omit) }}"
+        snat_bidirectional: "{{ item.snat_bidirectional | default(omit) }}"
+        snat_dynamic_address: "{{ item.snat_dynamic_address | default(omit) }}"
+        snat_interface: "{{ item.snat_interface | default(omit) }}"
+        snat_interface_address: "{{ item.snat_interface_address | default(omit) }}"
+        snat_static_address: "{{ item.snat_static_address | default(omit) }}"
+        snat_type: "{{ item.snat_type | default(omit) }}"
+        source_ip: "{{ item.source_ip | default(omit) }}"
+        source_user: "{{ item.source_user | default(omit) }}"
+        source_zone: "{{ item.source_zone | default(omit) }}"
+        state: "{{ item.state | default(omit) }}"
+        tag: "{{ item.tag | default(omit) }}"
+        vsys: "{{ item.vsys | default(omit) }}"
+        to_interface: "{{ item.to_interface | default(omit) }}"
+      with_items:
+       - "{{ nat_rules.rules }}"
+      tags:
+       - "debug"
+       - "rules"
+       - "nat_rules"
+      when: nat_rules_file.stat.exists
+
+
+
+
+    - name: Check if commit is required
+      paloaltonetworks.panos.panos_op:
+        provider: "{{ provider }}"
+        cmd: "check pending-changes"
+      register: pendingchanges
+      tags:
+       - "debug"
+       - "commit"
+
+    - name: Parse XML response
+      xml:
+        xmlstring: "{{ pendingchanges.stdout_xml }}"
+        xpath: "//result"
+        content: text
+      register: commitneeded
+      tags:
+       - "debug"
+       - "commit"
+
+
+    - name: Commit
+      paloaltonetworks.panos.panos_commit_firewall:
+        provider: "{{ provider }}"
+      when: commitneeded.matches[0].result == "yes" and skipcommit is not defined
+      tags:
+       - "debug"
+       - "commit"
+
+
+
+    

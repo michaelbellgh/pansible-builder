@@ -1,0 +1,495 @@
+<global-protect>
+<global-protect-gateway>
+{% for item in globalprotect.gateways %}
+<entry name="{{ item.name }}">
+<roles>
+<entry name="default">
+<login-lifetime>
+<days>30</days>
+</login-lifetime>
+<inactivity-logout>180</inactivity-logout>
+</entry>
+</roles>
+<client-auth>
+{% for auth in item.client_auths %}
+<entry name="{{ auth.name }}">
+<os>{{ auth.os | default("any", true) }}</os>
+<authentication-profile>{{ auth.auth_profile }}</authentication-profile>
+<authentication-message>Enter login credentials</authentication-message>
+<user-credential-or-client-cert-required>{{ auth.credential_or_cert | default("no", true) }}</user-credential-or-client-cert-required>
+<auto-retrieve-passcode>no</auto-retrieve-passcode>
+<username-label>Username</username-label>
+<password-label>Password</password-label>
+</entry>
+</client-auth>
+{% endfor %}
+<remote-user-tunnel-configs>
+{% for tunnel in item.tunnel_configs %}
+<entry name="{{ tunnel.name }}">
+<split-tunneling>
+<include-domains>
+<list/>
+</include-domains>
+<exclude-domains>
+<list/>
+</exclude-domains>
+<access-route/>
+<exclude-access-route/>
+<include-applications/>
+<exclude-applications/>
+</split-tunneling>
+<authentication-override>
+<generate-cookie>no</generate-cookie>
+</authentication-override>
+<source-address>
+<ip-address/>
+<region/>
+</source-address>
+<source-user>
+<member>any</member>
+</source-user>
+<authentication-server-ip-pool/>
+<ip-pool>
+{% for pool in tunnel.pools %}
+<member>{{ pool }}</member>
+{% endfor %}
+</ip-pool>
+<dns-server>
+{% if tunnel.dns is defined %}
+<member>{{ tunnel.dns }}</member>
+</dns-server>
+{% endif %}
+{% if tunnel.suffix is defined %}
+<dns-suffix>
+<member>{{ tunnel.suffix }}</member>
+</dns-suffix>
+{% endif %}
+<os>
+<member>any</member>
+</os>
+<retrieve-framed-ip-address>no</retrieve-framed-ip-address>
+<no-direct-access-to-local-network>no</no-direct-access-to-local-network>
+</entry>
+{% endfor %}
+</remote-user-tunnel-configs>
+<ssl-tls-service-profile>{{ item.service_profile }}</ssl-tls-service-profile>
+<tunnel-mode>yes</tunnel-mode>
+<remote-user-tunnel>{{ item.tunnel_interface }}</remote-user-tunnel>
+</entry>
+</global-protect-gateway>
+{% endfor %}
+<global-protect-portal>
+{% for item in globalprotect.portals %}
+<entry name="{{ item.name }}">
+<portal-config>
+<client-auth>
+{% for cauth in item.client_auth %}
+<entry name="{{ cauth.name }}">
+<user-credential-or-client-cert-required>no</user-credential-or-client-cert-required>
+<os>{{ cauth.os | default("any", true) }}</os>
+<authentication-profile>{{ cauth.auth_profile }}</authentication-profile>
+<authentication-message>{{ cauth.auth_message | default("Enter login credentials", true) }}</authentication-message>
+<auto-retrieve-passcode>no</auto-retrieve-passcode>
+<username-label>Username</username-label>
+<password-label>Password</password-label>
+</entry>
+{% endfor %}
+</client-auth>
+<local-address>
+<interface>{{ item.interface }}</interface>
+<ip/>
+</local-address>
+<custom-login-page>factory-default</custom-login-page>
+<custom-home-page>factory-default</custom-home-page>
+<ssl-tls-service-profile>{{ item.service_profile }}</ssl-tls-service-profile>
+</portal-config>
+<client-config>
+<configs>
+{% for conf in item.client_configs %}
+<entry name="{{ conf.name }}">
+<hip-collection> 
+<max-wait-time>20</max-wait-time>
+<collect-hip-data>yes</collect-hip-data>
+</hip-collection>
+<gateways>
+<internal>
+<list>
+{% for int_gateway in conf.internal_gateways %}
+<entry name="{{ int_gateway.name }}">
+{% if int_gateway.fqdn is defined %}
+<fqdn>{{ int_gateway.fqdn }}</fqdn>
+{% endif %}
+{% if int_gateway.ip is defined %}
+<ip>{{ int_gateway.ip }}</ip>
+{% endif %}
+</entry>
+{% endfor %}
+</list>
+</internal>
+<external>
+<list>
+{% for ext_gateway in conf.external_gateways %}
+<entry name="{{ ext_gateway.name }}">
+{% if ext_gateway.fqdn is defined %}
+<fqdn>{{ ext_gateway.fqdn }}</fqdn>
+{% endif %}
+{% if ext_gateway.ip is defined %}
+<ip>{{ ext_gateway.ip }}</ip>
+{% endif %}
+<priority-rule>
+{% if ext_gateway.priorities is defined %}
+{% for pri in ext_gateway.priorities %}
+<entry name="{{ pri.name }}">
+<priority>{{ pri.priority }}</priority>
+</entry>
+{% endfor %}
+{% else %}
+<entry name="any">
+<priority>1</priority>
+</entry>
+{% endif %}
+</priority-rule>
+<manual>{{ ext_gateway.manual | default("no", true) }}</manual>
+</entry>
+</list>
+<cutoff-time>5</cutoff-time>
+</external>
+{% endfor %}
+</gateways>
+<authentication-override>
+<generate-cookie>no</generate-cookie>
+</authentication-override>
+<source-user>
+<member>any</member>
+</source-user>
+<os>
+<member>any</member>
+</os>
+<agent-ui>
+<max-agent-user-overrides>0</max-agent-user-overrides>
+<agent-user-override-timeout>0</agent-user-override-timeout>
+</agent-ui>
+<internal-host-detection>
+{% if conf.internal_detection is defined %}
+<ip-address>{{ conf.internal_host }}</ip-address>
+<hostname>{{ conf.internal_hostname }}</hostname>
+{% endif %}
+</internal-host-detection>
+<gp-app-config>
+<config>
+<entry name="connect-method">
+<value>
+<member>{{ conf.connect_method | default("on-demand", true) }}</member>
+</value>
+</entry>
+<entry name="refresh-config-interval">
+<value>
+<member>24</member>
+</value>
+</entry>
+<entry name="agent-user-override">
+<value>
+<member>allowed</member>
+</value>
+</entry>
+<entry name="uninstall">
+<value>
+<member>allowed</member>
+</value>
+</entry>
+<entry name="client-upgrade">
+<value>
+<member>prompt</member>
+</value>
+</entry>
+<entry name="enable-signout">
+<value>
+<member>yes</member>
+</value>
+</entry>
+<entry name="use-sso">
+<value>
+<member>yes</member>
+</value>
+</entry>
+<entry name="use-sso-macos">
+<value>
+<member>no</member>
+</value>
+</entry>
+<entry name="logout-remove-sso">
+<value>
+<member>yes</member>
+</value>
+</entry>
+<entry name="krb-auth-fail-fallback">
+<value>
+<member>yes</member>
+</value>
+</entry>
+<entry name="default-browser">
+<value>
+<member>no</member>
+</value>
+</entry>
+<entry name="retry-tunnel">
+<value>
+<member>30</member>
+</value>
+</entry>
+<entry name="retry-timeout">
+<value>
+<member>5</member>
+</value>
+</entry>
+<entry name="enforce-globalprotect">
+<value>
+<member>no</member>
+</value>
+</entry>
+<entry name="captive-portal-exception-timeout">
+<value>
+<member>0</member>
+</value>
+</entry>
+<entry name="traffic-blocking-notification-delay">
+<value>
+<member>15</member>
+</value>
+</entry>
+<entry name="allow-traffic-blocking-notification-dismissal">
+<value>
+<member>yes</member>
+</value>
+</entry>
+<entry name="display-captive-portal-detection-msg">
+<value>
+<member>no</member>
+</value>
+</entry>
+<entry name="captive-portal-notification-delay">
+<value>
+<member>5</member>
+</value>
+</entry>
+<entry name="certificate-store-lookup">
+<value>
+<member>user-and-machine</member>
+</value>
+</entry>
+<entry name="scep-certificate-renewal-period">
+<value>
+<member>7</member>
+</value>
+</entry>
+<entry name="retain-connection-smartcard-removal">
+<value>
+<member>yes</member>
+</value>
+</entry>
+<entry name="enable-advanced-view">
+<value>
+<member>yes</member>
+</value>
+</entry>
+<entry name="enable-do-not-display-this-welcome-page-again">
+<value>
+<member>yes</member>
+</value>
+</entry>
+<entry name="rediscover-network">
+<value>
+<member>yes</member>
+</value>
+</entry>
+<entry name="resubmit-host-info">
+<value>
+<member>yes</member>
+</value>
+</entry>
+<entry name="can-change-portal">
+<value>
+<member>yes</member>
+</value>
+</entry>
+<entry name="can-continue-if-portal-cert-invalid">
+<value>
+<member>no</member>
+</value>
+</entry>
+<entry name="show-agent-icon">
+<value>
+<member>yes</member>
+</value>
+</entry>
+<entry name="user-switch-tunnel-rename-timeout">
+<value>
+<member>0</member>
+</value>
+</entry>
+<entry name="pre-logon-tunnel-rename-timeout">
+<value>
+<member>-1</member>
+</value>
+</entry>
+<entry name="preserve-tunnel-upon-user-logoff-timeout">
+<value>
+<member>0</member>
+</value>
+</entry>
+<entry name="ipsec-failover-ssl">
+<value>
+<member>0</member>
+</value>
+</entry>
+<entry name="display-tunnel-fallback-notification">
+<value>
+<member>yes</member>
+</value>
+</entry>
+<entry name="ssl-only-selection">
+<value>
+<member>0</member>
+</value>
+</entry>
+<entry name="tunnel-mtu">
+<value>
+<member>1400</member>
+</value>
+</entry>
+<entry name="max-internal-gateway-connection-attempts">
+<value>
+<member>0</member>
+</value>
+</entry>
+<entry name="portal-timeout">
+<value>
+<member>5</member>
+</value>
+</entry>
+<entry name="connect-timeout">
+<value>
+<member>5</member>
+</value>
+</entry>
+<entry name="receive-timeout">
+<value>
+<member>30</member>
+</value>
+</entry>
+<entry name="split-tunnel-option">
+<value>
+<member>network-traffic</member>
+</value>
+</entry>
+<entry name="enforce-dns">
+<value>
+<member>yes</member>
+</value>
+</entry>
+<entry name="append-local-search-domain">
+<value>
+<member>no</member>
+</value>
+</entry>
+<entry name="flush-dns">
+<value>
+<member>no</member>
+</value>
+</entry>
+<entry name="proxy-multiple-autodetect">
+<value>
+<member>no</member>
+</value>
+</entry>
+<entry name="use-proxy">
+<value>
+<member>yes</member>
+</value>
+</entry>
+<entry name="wsc-autodetect">
+<value>
+<member>yes</member>
+</value>
+</entry>
+<entry name="mfa-enabled">
+<value>
+<member>no</member>
+</value>
+</entry>
+<entry name="mfa-listening-port">
+<value>
+<member>4501</member>
+</value>
+</entry>
+<entry name="mfa-notification-msg">
+<value>
+<member>You have attempted to access a protected resource that requires additional authentication. Proceed to authenticate at</member>
+</value>
+</entry>
+<entry name="mfa-prompt-suppress-time">
+<value>
+<member>0</member>
+</value>
+</entry>
+<entry name="ipv6-preferred">
+<value>
+<member>yes</member>
+</value>
+</entry>
+<entry name="log-gateway">
+<value>
+<member>no</member>
+</value>
+</entry>
+<entry name="cdl-log">
+<value>
+<member>no</member>
+</value>
+</entry>
+<entry name="dem-notification">
+<value>
+<member>yes</member>
+</value>
+</entry>
+<entry name="dem-agent">
+<value>
+<member>not-install</member>
+</value>
+</entry>
+<entry name="quarantine-add-message">
+<value>
+<member>Access to the network from this device has been restricted as per your organization's security policy. Please contact your IT Administrator.</member>
+</value>
+</entry>
+<entry name="quarantine-remove-message">
+<value>
+<member>Access to the network from this device has been restored as per your organization's security policy.</member>
+</value>
+</entry>
+<entry name="init-panel">
+<value>
+<member>no</member>
+</value>
+</entry>
+</config>
+</gp-app-config>
+<save-user-credentials>1</save-user-credentials>
+<portal-2fa>no</portal-2fa>
+<manual-only-gateway-2fa>no</manual-only-gateway-2fa>
+<internal-gateway-2fa>no</internal-gateway-2fa>
+<auto-discovery-external-gateway-2fa>no</auto-discovery-external-gateway-2fa>
+<mdm-enrollment-port>443</mdm-enrollment-port>
+</entry>
+{% endfor %}
+</configs>
+</client-config>
+<satellite-config>
+<client-certificate>
+<local/>
+</client-certificate>
+</satellite-config>
+</entry>
+{% endfor %}
+</global-protect-portal>
+</global-protect>

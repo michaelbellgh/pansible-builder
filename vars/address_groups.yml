@@ -1,0 +1,4 @@
+groups:
+  - name: "Domain Controllers"
+    static_value: ["192.168.5.20"]
+    tags: ["Infra"]

@@ -1,0 +1,37 @@
+  rules:
+      
+    - rule_name: MyTestRule
+      application: ["ssl", "web-browsing"]
+      action: "allow"
+      category: ["business-and-economy"]
+      data_filtering: "my_dlp_profile"
+      description: "My Description"
+      destination_ip: ["1.2.3.4", "MyObjectHere"]
+      destination_zone: ["WAN"]
+      disable_server_response_inspection: false
+      existing_rule: "Pre_Rule_Here"
+      file_blocking: "file-blocking-profile"
+      group_profile: "security_profile_group"
+      hip_profiles: "my_hip_profile"
+      icmp_unreachable: "false"
+      location: "top"
+      log_end: true
+      log_setting: "my_log_profile"
+      log_start: false
+      negate_destination: false
+      negate_source: false
+      rule_type: "universal"
+      schedule: "my_schedule"
+      service: ["service-http", "service-https"]
+      source_ip: ["source_ip_object", "192.168.1.0/24"]
+      source_user: "domain\\user"
+      source_zone: ["Trust"]
+      spyware: "spyware_profile"
+      state: "present"
+      tag_name: ["tag1"]
+      url_filtering: "url_profile"
+      vsys: "vsys1"
+      vulnerability: "vuln_profile"
+      wildfire_analysis: "wf_profile"
+
+    

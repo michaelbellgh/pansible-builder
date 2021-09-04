@@ -1,0 +1,6 @@
+addresses:
+  - name: "DC1"
+    type: "ip-netmask"
+    value: "192.168.5.20"
+    tags: 
+     - "Infra"

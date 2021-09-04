@@ -1,0 +1,18 @@
+  rules:
+      
+    - rule_name: Hairpin Rule
+      source_zone: ["Trust"]
+      destination_zone: "WAN"
+      destination_ip: ["my_fqdn_object"]
+      dnat_address: '192.168.1.10'
+      dnat_port: '443'
+      service: "service-https"
+      tag: ["tag1"]
+
+      
+    - rule_name: Internet SNAT
+      source_zone: ["any"]
+      snat_type: "dynamic-ip-and-port"
+      destination_zone: "WAN"
+      snat_interface: "ethernet1/1"
+      snat_address_type: "interface-address"

@@ -1,0 +1,12 @@
+<tag>
+{% for item in tags.tags %}
+<entry name='{{ item.name }}'>
+{% if item.color is defined %}
+<color>{{ item.color }}</color>
+{% endif %}
+{% if item.comments is defined %}
+<comments>{{ item.comments }}</comments>
+{% endif %}
+</entry>
+{% endfor %}
+</tag>
