@@ -55,6 +55,11 @@
         timezone: "{{ timezone }}"
 
 
+    - name: Check if SSL cert exists
+      stat:
+        path: "data/ssl/PaloAlto-MGMT.pfx"
+      register: ssl_cert_file
+ 
     - name: Upload web cert
       paloaltonetworks.panos.panos_import:
         provider: "{{ provider }}"
@@ -63,6 +68,7 @@
         passphrase: "Password1234"
         filename: "data/ssl/PaloAlto-MGMT.pfx"
         format: pkcs12
+      when: ssl_cert_file.stat.exists
 
     - name: Set template config snippets
       paloaltonetworks.panos.panos_type_cmd:
@@ -227,6 +233,7 @@
         filename: "{{ item.file }}"
       with_items:
        - { name: "Palo Alto SSL Decrypt CA1", password: "Password1234", file: "data/ssl/PaloAltoCA.pfx"}
+      when: ssl_cert_file.stat.exists
 
 
     - name: Check if address objects YML exists
